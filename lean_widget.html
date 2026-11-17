@@ -1,0 +1,855 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lean Flow Simulator: Push vs Pull</title>
+    <style>
+        :root {
+            /* Мягкий градиент самого тела симулятора */
+            --widget-gradient: linear-gradient(135deg, rgba(238, 242, 255, 0.95) 0%, rgba(243, 232, 255, 0.95) 50%, rgba(224, 242, 254, 0.95) 100%);
+            
+            /* Элементы внутри симулятора (Матовое стекло) */
+            --glass-bg: rgba(255, 255, 255, 0.7);
+            --glass-bg-subtle: rgba(255, 255, 255, 0.5);
+            --glass-border: rgba(255, 255, 255, 0.9);
+            --widget-shadow: 0 16px 40px -10px rgba(99, 102, 241, 0.12), 0 4px 12px rgba(0, 0, 0, 0.03);
+            
+            --text-main: #0f172a;
+            --text-muted: #64748b;
+
+            /* Модные градиенты кнопок */
+            --grad-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+            --grad-push: linear-gradient(135deg, #f43f5e 0%, #fb7185 100%);
+            --grad-pull: linear-gradient(135deg, #10b981 0%, #34d399 100%);
+            --grad-warning: linear-gradient(135deg, #f59e0b 0%, #fbbf24 100%);
+            --grad-dark: linear-gradient(135deg, #334155 0%, #475569 100%);
+            
+            /* Свечения кнопок */
+            --glow-primary: 0 4px 14px rgba(99, 102, 241, 0.25);
+            --glow-push: 0 4px 14px rgba(244, 63, 94, 0.25);
+            --glow-pull: 0 4px 14px rgba(16, 185, 129, 0.25);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, Helvetica, Arial, sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        /* Прозрачный фон страницы для чистой интеграции */
+        body {
+            background: transparent;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* Главный корпус симулятора с градиентом и стеклом */
+        .widget-container {
+            width: 100%;
+            max-width: 900px;
+            background: var(--widget-gradient);
+            backdrop-filter: blur(20px) saturate(180%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%);
+            border: 1px solid var(--glass-border);
+            border-radius: 24px;
+            padding: 24px;
+            box-shadow: var(--widget-shadow);
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        /* Шапка */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--grad-primary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 19px;
+            box-shadow: var(--glow-primary);
+        }
+
+        .title {
+            font-size: 1.2rem;
+            font-weight: 800;
+            letter-spacing: -0.02em;
+            color: var(--text-main);
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Кнопка инструкции */
+        .btn-glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            padding: 8px 15px;
+            border-radius: 12px;
+            font-size: 0.82rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.25s ease;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+        }
+
+        .btn-glass:hover {
+            background: rgba(255, 255, 255, 0.9);
+            transform: translateY(-1px);
+        }
+
+        /* Переключатель PUSH / PULL */
+        .mode-switch {
+            display: flex;
+            background: rgba(15, 23, 42, 0.06);
+            padding: 4px;
+            border-radius: 14px;
+            border: 1px solid rgba(255, 255, 255, 0.6);
+            gap: 4px;
+        }
+
+        .mode-btn {
+            border: none;
+            padding: 8px 18px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 0.82rem;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: transparent;
+            color: var(--text-muted);
+        }
+
+        .mode-btn.active[data-mode="PUSH"] {
+            background: var(--grad-push);
+            color: white;
+            box-shadow: var(--glow-push);
+        }
+
+        .mode-btn.active[data-mode="PULL"] {
+            background: var(--grad-pull);
+            color: white;
+            box-shadow: var(--glow-pull);
+        }
+
+        /* Подробная инструкция */
+        .instruction-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            border-radius: 18px;
+            padding: 18px;
+            display: none;
+            flex-direction: column;
+            gap: 12px;
+            animation: slideDown 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .instruction-card.open {
+            display: flex;
+        }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-8px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .instruction-header {
+            font-size: 0.9rem;
+            font-weight: 800;
+            color: #4338ca;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .instruction-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 10px;
+        }
+
+        .instruction-step {
+            background: rgba(255, 255, 255, 0.75);
+            border: 1px solid rgba(255, 255, 255, 0.9);
+            padding: 12px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            color: var(--text-main);
+            line-height: 1.45;
+        }
+
+        .instruction-step b {
+            color: #4338ca;
+            display: block;
+            margin-bottom: 3px;
+            font-size: 0.85rem;
+        }
+
+        /* Правило текущего режима */
+        .rule-banner {
+            font-size: 0.82rem;
+            padding: 11px 16px;
+            border-radius: 14px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            line-height: 1.45;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        /* Панель управления */
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 14px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            padding: 14px 18px;
+            border-radius: 16px;
+            align-items: center;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .control-group label {
+            font-size: 0.7rem;
+            font-weight: 800;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .control-group input[type="range"] {
+            width: 100%;
+            accent-color: #6366f1;
+            cursor: pointer;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+
+        /* Градиентные кнопки */
+        .btn-grad {
+            border: none;
+            padding: 9px 16px;
+            border-radius: 12px;
+            font-size: 0.82rem;
+            font-weight: 700;
+            color: white;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+
+        .btn-grad:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.08);
+        }
+
+        .btn-grad:active {
+            transform: translateY(0);
+        }
+
+        .btn-buy { background: var(--grad-pull); box-shadow: var(--glow-pull); }
+        .btn-break { background: var(--grad-warning); }
+        .btn-break.active { background: var(--grad-push); box-shadow: var(--glow-push); }
+        .btn-reset { background: var(--grad-dark); }
+
+        /* Игровое поле завода */
+        .factory-floor {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 22px 12px;
+            background: var(--glass-bg-subtle);
+            border-radius: 18px;
+            border: 1px solid var(--glass-border);
+            overflow-x: auto;
+            gap: 8px;
+        }
+
+        .stage-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 110px;
+            background: rgba(255, 255, 255, 0.8);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 12px 8px;
+            position: relative;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.02);
+        }
+
+        .stage-card.working {
+            background: rgba(240, 253, 244, 0.9);
+            border-color: #a7f3d0;
+        }
+
+        .stage-card.broken {
+            background: rgba(255, 241, 242, 0.9);
+            border-color: #fecdd3;
+        }
+
+        .stage-title {
+            font-size: 0.78rem;
+            font-weight: 800;
+            text-align: center;
+            margin-bottom: 6px;
+            color: var(--text-main);
+        }
+
+        .stage-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #cbd5e1;
+            margin-bottom: 6px;
+        }
+
+        .stage-card.working .stage-status { background: #10b981; }
+        .stage-card.broken .stage-status { background: #f43f5e; }
+
+        .item-slot {
+            height: 28px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        /* Буферы НЗП */
+        .buffer-card {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 60px;
+            background: rgba(255, 255, 255, 0.45);
+            border-radius: 12px;
+            padding: 8px 4px;
+            border: 1px dashed rgba(148, 163, 184, 0.4);
+        }
+
+        .buffer-title {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            font-weight: 800;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .buffer-items {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+            max-width: 60px;
+            justify-content: center;
+            min-height: 20px;
+        }
+
+        /* Товар (Деталь) */
+        .product-item {
+            width: 13px;
+            height: 13px;
+            background: var(--grad-primary);
+            border-radius: 4px;
+            box-shadow: 0 2px 5px rgba(99, 102, 241, 0.25);
+            animation: softPop 0.25s ease-out;
+        }
+
+        @keyframes softPop {
+            0% { transform: scale(0.6); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        /* Медленная мягкая пульсация товара при обработке */
+        .stage-card.working .item-slot .product-item {
+            animation: softPulse 2.2s infinite ease-in-out;
+        }
+
+        @keyframes softPulse {
+            0%, 100% { opacity: 0.55; transform: scale(0.95); }
+            50% { opacity: 0.95; transform: scale(1.03); }
+        }
+
+        /* Карточка Канбан (Сигнал) */
+        .kanban-signal {
+            position: absolute;
+            width: 20px;
+            height: 15px;
+            background: var(--grad-warning);
+            border-radius: 4px;
+            top: 12px;
+            font-size: 9px;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 10;
+            box-shadow: 0 2px 6px rgba(245, 158, 11, 0.25);
+            animation: moveKanban 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        @keyframes moveKanban {
+            0% { right: 12%; opacity: 1; transform: scale(0.85); }
+            100% { right: 82%; opacity: 0; transform: scale(1.05); }
+        }
+
+        /* Метрики */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+        }
+
+        .metric-card {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            padding: 12px;
+            border-radius: 14px;
+            text-align: center;
+        }
+
+        .metric-title {
+            font-size: 0.68rem;
+            color: var(--text-muted);
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .metric-value {
+            font-size: 1.2rem;
+            font-weight: 800;
+            margin-top: 4px;
+            color: var(--text-main);
+            letter-spacing: -0.02em;
+        }
+
+        .metric-value.danger { color: #f43f5e; }
+        .metric-value.success { color: #10b981; }
+
+        @media (max-width: 700px) {
+            .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+            .factory-floor { flex-direction: column; align-items: stretch; }
+            .buffer-card { min-height: 40px; }
+            .header { flex-direction: column; align-items: flex-start; }
+            .mode-switch { width: 100%; }
+            .mode-btn { flex: 1; text-align: center; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="widget-container">
+    <!-- Шапка -->
+    <div class="header">
+        <div class="brand">
+            <div class="brand-icon">⚙️</div>
+            <div class="title">Lean Flow Simulator</div>
+        </div>
+        <div class="header-actions">
+            <button class="btn-glass" id="btn-toggle-help">
+                <span>📖</span> Инструкция
+            </button>
+            <div class="mode-switch">
+                <button class="mode-btn active" data-mode="PUSH" id="btn-push">PUSH (Толкание)</button>
+                <button class="mode-btn" data-mode="PULL" id="btn-pull">PULL (Вытягивание)</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Окно с инструкцией -->
+    <div class="instruction-card" id="instruction-card">
+        <div class="instruction-header">
+            <span>💡</span> Подробная инструкция по симулятору:
+        </div>
+        <div class="instruction-grid">
+            <div class="instruction-step">
+                <b>1. Эксперимент PUSH (Толкание)</b>
+                Завод работает по «плану сверху». Нажмите кнопку <b>«Сломать Сборку»</b>. Участок №1 продолжит штамповать детали «на склад». Наблюдайте, как растет НЗП и сгорает виртуальный бюджет.
+            </div>
+            <div class="instruction-step">
+                <b>2. Эксперимент PULL (Вытягивание)</b>
+                Переключите режим на <b>PULL</b>. Нажмите кнопку <b>«Купить»</b>. Деталь запрашивается из Супермаркета, запускается карточка Канбан, и только тогда Штамповка производит 1 деталь.
+            </div>
+            <div class="instruction-step">
+                <b>3. Обнаружение проблем</b>
+                Сломайте Сборку в режиме PULL. Вы увидите, что Штамповка <b>мгновенно остановится сама</b>, так как сигналы Канбан перестали поступать. Проблема сразу стала видимой!
+            </div>
+        </div>
+    </div>
+
+    <!-- Информационный баннер правила -->
+    <div class="rule-banner" id="rule-banner">
+        <span>📌</span> <span id="rule-text"><b>Режим PUSH:</b> Каждый участок работает по своему плану и "толкает" детали дальше, не учитывая потребность следующего этапа.</span>
+    </div>
+
+    <!-- Панель управления -->
+    <div class="controls">
+        <div class="control-group">
+            <label>Спрос клиентов (покупки):</label>
+            <input type="range" id="slider-demand" min="1" max="5" value="2">
+        </div>
+        <div class="control-group" id="kanban-control" style="opacity: 0.35; pointer-events: none;">
+            <label>Лимит Канбан (карточек): <span id="kanban-val">3</span></label>
+            <input type="range" id="slider-kanban" min="1" max="6" value="3">
+        </div>
+        <div class="button-group">
+            <button class="btn-grad btn-buy" id="btn-buy">Купить (1 шт)</button>
+            <button class="btn-grad btn-break" id="btn-toggle-break">Сломать Сборку</button>
+            <button class="btn-grad btn-reset" id="btn-reset" title="Сбросить">🔄</button>
+        </div>
+    </div>
+
+    <!-- Игровое поле -->
+    <div class="factory-floor" id="factory-floor">
+        <div class="stage-card" id="stage-0">
+            <div class="stage-title">1. Штамповка</div>
+            <div class="stage-status"></div>
+            <div class="item-slot"></div>
+        </div>
+
+        <div class="buffer-card">
+            <div class="buffer-title">НЗП 1</div>
+            <div class="buffer-items" id="buf-0"></div>
+        </div>
+
+        <div class="stage-card" id="stage-1">
+            <div class="stage-title">2. Сборка</div>
+            <div class="stage-status"></div>
+            <div class="item-slot"></div>
+        </div>
+
+        <div class="buffer-card">
+            <div class="buffer-title">НЗП 2</div>
+            <div class="buffer-items" id="buf-1"></div>
+        </div>
+
+        <div class="stage-card" id="stage-2">
+            <div class="stage-title">3. Упаковка</div>
+            <div class="stage-status"></div>
+            <div class="item-slot"></div>
+        </div>
+
+        <div class="buffer-card" style="background: rgba(224, 242, 254, 0.6); border-color: #7dd3fc;">
+            <div class="buffer-title" style="color: #0284c7;">Супермаркет</div>
+            <div class="buffer-items" id="buf-2"></div>
+        </div>
+    </div>
+
+    <!-- Метрики -->
+    <div class="metrics-grid">
+        <div class="metric-card">
+            <div class="metric-title">Всего НЗП (WIP)</div>
+            <div class="metric-value" id="metric-wip">0 шт</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Заморожено $</div>
+            <div class="metric-value danger" id="metric-money">$0</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Время цикла (Lead Time)</div>
+            <div class="metric-value" id="metric-leadtime">0.0 c</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Продано товара</div>
+            <div class="metric-value success" id="metric-sales">0 шт</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const state = {
+        mode: 'PUSH',
+        kanbanLimit: 3,
+        demandSpeed: 2,
+        isBrokenStage1: false,
+        
+        stages: [
+            { id: 0, name: 'Штамповка', duration: 15, timer: 0, currentItem: null, broken: false },
+            { id: 1, name: 'Сборка', duration: 25, timer: 0, currentItem: null, broken: false },
+            { id: 2, name: 'Упаковка', duration: 15, timer: 0, currentItem: null, broken: false }
+        ],
+
+        buffers: [[], [], []],
+
+        totalSales: 0,
+        completedLeadTimes: [],
+        tickCounter: 0,
+        nextItemId: 1,
+        autoCustomerTimer: 0
+    };
+
+    const ui = {
+        btnPush: document.getElementById('btn-push'),
+        btnPull: document.getElementById('btn-pull'),
+        btnToggleHelp: document.getElementById('btn-toggle-help'),
+        instructionCard: document.getElementById('instruction-card'),
+        ruleText: document.getElementById('rule-text'),
+        sliderDemand: document.getElementById('slider-demand'),
+        sliderKanban: document.getElementById('slider-kanban'),
+        kanbanControl: document.getElementById('kanban-control'),
+        kanbanVal: document.getElementById('kanban-val'),
+        btnBreak: document.getElementById('btn-toggle-break'),
+        btnBuy: document.getElementById('btn-buy'),
+        btnReset: document.getElementById('btn-reset'),
+        
+        stages: [
+            document.getElementById('stage-0'),
+            document.getElementById('stage-1'),
+            document.getElementById('stage-2')
+        ],
+        buffers: [
+            document.getElementById('buf-0'),
+            document.getElementById('buf-1'),
+            document.getElementById('buf-2')
+        ],
+        
+        metricWip: document.getElementById('metric-wip'),
+        metricMoney: document.getElementById('metric-money'),
+        metricLeadTime: document.getElementById('metric-leadtime'),
+        metricSales: document.getElementById('metric-sales'),
+        factoryFloor: document.getElementById('factory-floor')
+    };
+
+    function initEvents() {
+        ui.btnPush.addEventListener('click', () => setMode('PUSH'));
+        ui.btnPull.addEventListener('click', () => setMode('PULL'));
+
+        ui.btnToggleHelp.addEventListener('click', () => {
+            ui.instructionCard.classList.toggle('open');
+        });
+
+        ui.sliderDemand.addEventListener('input', (e) => {
+            state.demandSpeed = parseInt(e.target.value);
+        });
+
+        ui.sliderKanban.addEventListener('input', (e) => {
+            state.kanbanLimit = parseInt(e.target.value);
+            ui.kanbanVal.innerText = state.kanbanLimit;
+        });
+
+        ui.btnBreak.addEventListener('click', () => {
+            state.isBrokenStage1 = !state.isBrokenStage1;
+            state.stages[1].broken = state.isBrokenStage1;
+            ui.btnBreak.classList.toggle('active', state.isBrokenStage1);
+            ui.btnBreak.innerText = state.isBrokenStage1 ? "Починить Сборку" : "Сломать Сборку";
+        });
+
+        ui.btnBuy.addEventListener('click', () => {
+            triggerCustomerPurchase();
+        });
+
+        ui.btnReset.addEventListener('click', resetSimulation);
+    }
+
+    function setMode(mode) {
+        state.mode = mode;
+        ui.btnPush.classList.toggle('active', mode === 'PUSH');
+        ui.btnPull.classList.toggle('active', mode === 'PULL');
+
+        if (mode === 'PUSH') {
+            ui.ruleText.innerHTML = '<b>Режим PUSH:</b> Каждый участок работает по своему плану и "толкает" детали дальше, не учитывая потребность следующего этапа.';
+            ui.kanbanControl.style.opacity = '0.35';
+            ui.kanbanControl.style.pointerEvents = 'none';
+        } else {
+            ui.ruleText.innerHTML = '<b>Режим PULL:</b> Сигнал на производство идет СПРАВА НАЛЕВО. Участок №1 не начнет работу, пока клиент не забрал деталь из Супермаркета и не освободил карточку Канбан.';
+            ui.kanbanControl.style.opacity = '1';
+            ui.kanbanControl.style.pointerEvents = 'auto';
+        }
+        resetSimulation();
+    }
+
+    function resetSimulation() {
+        state.stages.forEach(s => { s.timer = 0; s.currentItem = null; });
+        state.buffers = [[], [], []];
+        state.totalSales = 0;
+        state.completedLeadTimes = [];
+        state.tickCounter = 0;
+        state.nextItemId = 1;
+        render();
+    }
+
+    function getTotalWIP() {
+        let count = 0;
+        state.stages.forEach(s => { if (s.currentItem) count++; });
+        state.buffers.forEach(b => count += b.length);
+        return count;
+    }
+
+    function triggerCustomerPurchase() {
+        if (state.buffers[2].length > 0) {
+            const item = state.buffers[2].shift();
+            const leadTime = (state.tickCounter - item.createdAt) / 10;
+            state.completedLeadTimes.push(leadTime);
+            if (state.completedLeadTimes.length > 20) state.completedLeadTimes.shift();
+            state.totalSales++;
+
+            if (state.mode === 'PULL') {
+                spawnKanbanAnimation();
+            }
+        }
+    }
+
+    function spawnKanbanAnimation() {
+        const card = document.createElement('div');
+        card.className = 'kanban-signal';
+        card.innerText = '📋';
+        ui.factoryFloor.appendChild(card);
+        setTimeout(() => card.remove(), 600);
+    }
+
+    function simulationTick() {
+        state.tickCounter++;
+
+        state.autoCustomerTimer++;
+        const customerInterval = (6 - state.demandSpeed) * 15;
+        if (state.autoCustomerTimer >= customerInterval) {
+            triggerCustomerPurchase();
+            state.autoCustomerTimer = 0;
+        }
+
+        processStage(2, 2);
+        processStage(1, 1);
+
+        if (state.mode === 'PULL') {
+            const currentWip = getTotalWIP();
+            if (currentWip < state.kanbanLimit) {
+                processStage(0, 0);
+            }
+        } else {
+            processStage(0, 0);
+        }
+
+        render();
+    }
+
+    function processStage(stageIdx, targetBufferIdx) {
+        const stage = state.stages[stageIdx];
+
+        if (stage.broken) return;
+
+        if (stage.currentItem) {
+            stage.timer++;
+            if (stage.timer >= stage.duration) {
+                state.buffers[targetBufferIdx].push(stage.currentItem);
+                stage.currentItem = null;
+                stage.timer = 0;
+            }
+        } else {
+            if (stageIdx === 0) {
+                stage.currentItem = { id: state.nextItemId++, createdAt: state.tickCounter };
+                stage.timer = 0;
+            } else {
+                const prevBuffer = state.buffers[stageIdx - 1];
+                if (prevBuffer.length > 0) {
+                    stage.currentItem = prevBuffer.shift();
+                    stage.timer = 0;
+                }
+            }
+        }
+    }
+
+    function render() {
+        state.stages.forEach((s, idx) => {
+            const stageEl = ui.stages[idx];
+            const slot = stageEl.querySelector('.item-slot');
+            
+            stageEl.classList.toggle('working', !!s.currentItem && !s.broken);
+            stageEl.classList.toggle('broken', s.broken);
+
+            slot.innerHTML = s.currentItem ? `<div class="product-item"></div>` : '';
+        });
+
+        state.buffers.forEach((buf, idx) => {
+            const bufEl = ui.buffers[idx];
+            bufEl.innerHTML = '';
+            const displayCount = Math.min(buf.length, 12);
+            for (let i = 0; i < displayCount; i++) {
+                const item = document.createElement('div');
+                item.className = 'product-item';
+                bufEl.appendChild(item);
+            }
+            if (buf.length > 12) {
+                const badge = document.createElement('span');
+                badge.style.fontSize = '10px';
+                badge.style.fontWeight = 'bold';
+                badge.style.color = '#64748b';
+                badge.innerText = `+${buf.length - 12}`;
+                bufEl.appendChild(badge);
+            }
+        });
+
+        const totalWip = getTotalWIP();
+        const moneyTiedUp = totalWip * 100;
+        
+        let avgLeadTime = 0;
+        if (state.completedLeadTimes.length > 0) {
+            const sum = state.completedLeadTimes.reduce((a, b) => a + b, 0);
+            avgLeadTime = (sum / state.completedLeadTimes.length).toFixed(1);
+        }
+
+        ui.metricWip.innerText = `${totalWip} шт`;
+        ui.metricMoney.innerText = `$${moneyTiedUp}`;
+        ui.metricLeadTime.innerText = `${avgLeadTime} c`;
+        ui.metricSales.innerText = `${state.totalSales} шт`;
+
+        if (totalWip > 8 && state.mode === 'PUSH') {
+            ui.metricWip.className = 'metric-value danger';
+        } else {
+            ui.metricWip.className = 'metric-value';
+        }
+    }
+
+    initEvents();
+    setInterval(simulationTick, 100);
+</script>
+
+</body>
+</html>
